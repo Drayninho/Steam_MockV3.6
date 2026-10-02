@@ -1,0 +1,310 @@
+type CatalogSkin = {
+  market_hash_name:string; weapon:string; finish:string; rarity:string; rarityColor?:string;
+  wears:string[]; floatMin:number; floatMax:number; image?:string; stattrak?:boolean; souvenir?:boolean;
+};
+type MockItem = {
+  id:string; name:string; weapon:string; finish:string; wear:string; float:string; pattern:string;
+  rarity:string; rarityColor?:string; stattrak:boolean; kills:number; souvenir:boolean;
+  imageUrl:string; marketUrl:string; source?:string;
+};
+
+const STORAGE_KEY='steam-inventory-mock.items.v3';
+const ENABLED_KEY='steam-inventory-mock.enabled.v3_6';
+const CATALOG_KEY='steam-inventory-mock.catalog.v3_6';
+const PANEL_ID='steam-inventory-mock-v36-panel';
+const DETAIL_ID='steam-inventory-mock-v36-detail';
+const STYLE_ID='steam-inventory-mock-v36-style';
+const FAKE_CLASS='steam-inventory-mock-v36-item';
+const INTERNAL_ATTR='data-sim-v33-internal';
+const CATALOG_URL='https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins.json';
+
+const FALLBACK:CatalogSkin[]=[
+ ['AK-47','Redline','Classified',.10,.70],['AK-47','Case Hardened','Restricted',0,.80],
+ ['AK-47','Fire Serpent','Covert',.06,.76],['AK-47','Vulcan','Covert',0,.90],
+ ['AK-47','Aquamarine Revenge','Covert',0,.85],['AK-47','Fuel Injector','Covert',0,1],
+ ['AK-47','Neon Revolution','Covert',0,.80],['AK-47','Bloodsport','Covert',0,.70],
+ ['AWP','Dragon Lore','Covert',0,.70],['AWP','Asiimov','Covert',.18,1],
+ ['AWP','Lightning Strike','Covert',0,.08],['AWP','Wildfire','Covert',.07,.50],
+ ['M4A4','Howl','Contraband',0,.40],['M4A4','Asiimov','Covert',.18,1],
+ ['M4A4','Desolate Space','Classified',0,.80],['M4A4','The Coalition','Covert',0,.80],
+ ['Glock-18','Fade','Restricted',0,.08],['Glock-18','Gamma Doppler','Restricted',0,.08],
+ ['Glock-18','Water Elemental','Classified',0,.70],['USP-S','Kill Confirmed','Covert',0,.85],
+ ['USP-S','Printstream','Covert',0,.85],['Karambit','Doppler','Covert',0,.08],
+ ['Karambit','Fade','Covert',0,.08],['Karambit','Case Hardened','Covert',0,.80]
+].map((x:any)=>({market_hash_name:`${x[0]} | ${x[1]} (Factory New)`,weapon:x[0],finish:x[1],rarity:x[2],wears:['Factory New','Minimal Wear','Field-Tested','Well-Worn','Battle-Scarred'],floatMin:x[3],floatMax:x[4]}));
+
+const SIM_CSS=`
+#${PANEL_ID}{position:fixed;z-index:2147483647;right:18px;bottom:18px;width:500px;max-height:84vh;overflow:auto;font:13px Arial;color:#d6d7d8;background:#171a21;border:1px solid #3b4048;border-radius:8px;box-shadow:0 18px 55px #000a}
+#${PANEL_ID} *{box-sizing:border-box}#${PANEL_ID} .h{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#1b2838;border-bottom:1px solid #303b49;position:sticky;top:0;z-index:2}.t{font-size:16px;font-weight:700;color:#fff}.s{font-size:11px;color:#8f98a0}.b{padding:12px}.note{background:#202a35;border-left:3px solid #67c1f5;padding:8px 9px;margin-bottom:10px;color:#b8c7d4;line-height:1.35}.btn{border:0;border-radius:3px;background:#2a475e;color:#e5f2ff;padding:7px 10px;cursor:pointer}.btn:hover{background:#315a78}.close{background:transparent;color:#aeb4bb;font-size:18px}.primary{width:100%;margin-bottom:8px;background:#1a9fff}.row{display:flex;gap:8px}.row>*{flex:1}.f{margin-bottom:8px}.f label{display:block;font-size:11px;color:#9aa4ad;margin-bottom:4px}.f input,.f select{width:100%;border:1px solid #3d4650;background:#11151b;color:#e7e8e9;border-radius:3px;padding:7px}.check{display:flex;gap:7px;align-items:center;margin:6px 0}.status,.diag{font-size:11px;color:#9fb7c9;margin:7px 0}.list{margin-top:12px}.lr{display:flex;align-items:center;gap:8px;background:#1d222a;border:1px solid #303640;border-radius:4px;padding:7px;margin-bottom:6px}.lr img{width:58px;height:42px;object-fit:contain;background:#11151b}.lm{flex:1;min-width:0}.ln{font-weight:700;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meta{font-size:10px;color:#89929c;margin-top:2px}.danger{background:#5c2525}
+.${FAKE_CLASS}{position:relative!important;cursor:pointer!important;outline:none!important}.${FAKE_CLASS} > .item{display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;height:100%!important;box-sizing:border-box!important;position:relative!important;overflow:hidden!important}.${FAKE_CLASS} > .item > img{display:block!important;position:static!important;width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;object-fit:contain!important;margin:0!important;transform:none!important}.${FAKE_CLASS} > .item > a{position:absolute!important;inset:0!important;display:block!important;z-index:5!important}.${FAKE_CLASS} button{pointer-events:none!important}
+#${DETAIL_ID}{position:fixed;z-index:2147483646;right:535px;top:120px;width:350px;max-height:72vh;overflow:auto;background:#171a21;color:#ddd;border:1px solid #3b4048;border-radius:5px;box-shadow:0 18px 55px #000a;font:13px Arial}
+#${DETAIL_ID} .dh{padding:12px;background:#1b2838;border-bottom:1px solid #303b49;display:flex;justify-content:space-between}.di{padding:12px}.dimg{height:205px;background:#101318;display:flex;align-items:center;justify-content:center}.dimg img{max-width:100%;max-height:100%;object-fit:contain}.kv{display:flex;justify-content:space-between;border-bottom:1px solid #2a2f36;padding:7px 0;color:#aaa}.kv b{color:#eee}
+`;
+
+const log=(...a:unknown[])=>console.log('[SIM3.6]',...a);
+let renderScheduled=false,injectScheduled=false,lastUrl=location.href,observer:MutationObserver|null=null;
+let catalog:CatalogSkin[]=[...FALLBACK],catalogLoading=false;
+
+function getItems():MockItem[]{try{const x=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');return Array.isArray(x)?x:[]}catch{return[]}}
+function setItems(x:MockItem[]){localStorage.setItem(STORAGE_KEY,JSON.stringify(x))}
+function esc(v:unknown){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!))}
+function ensureStyle(){if(document.getElementById(STYLE_ID))return;const s=document.createElement('style');s.id=STYLE_ID;s.setAttribute(INTERNAL_ATTR,'1');s.textContent=SIM_CSS;(document.head||document.documentElement).appendChild(s)}
+function enabled(){return localStorage.getItem(ENABLED_KEY)!=='false'}
+function isCommunityInventory(){return location.hostname==='steamcommunity.com'&&/^\/(?:profiles|id)\/[^/]+\/inventory\/?/i.test(location.pathname)}
+function isCS2(){return /(?:^|[\/#?&])730(?:$|[\/#?&])/i.test(location.hash)||/[?&]appid=730(?:&|$)/i.test(location.search)||!!document.querySelector('#game_select_730,.games_list_tab[data-appid="730"],[data-appid="730"]')||/Counter-Strike/i.test(document.body?.innerText?.slice(0,6000)||'')}
+function inventoryPage(){return isCommunityInventory()&&(isCS2()||location.hash===''||location.hash==='#730')}
+function uid(){return `fake-${Date.now()}-${Math.random().toString(36).slice(2,8)}`}
+function getInventoryRoot():HTMLElement|null{return document.querySelector<HTMLElement>('.inventory_ctn')||document.querySelector<HTMLElement>('#inventories')||document.querySelector<HTMLElement>('.inventory_page')}
+function getItemHolders(){const root=getInventoryRoot();if(!root)return[];return [...root.querySelectorAll<HTMLElement>('.itemHolder')].filter(x=>!x.classList.contains(FAKE_CLASS)&&x.getBoundingClientRect().width>20&&x.getBoundingClientRect().height>20)}
+function diagnose(){return `URL: ${location.pathname}${location.hash||''} · root: ${getInventoryRoot()?'ok':'não encontrado'} · itemHolder: ${getItemHolders().length} · falsos: ${getItems().length} · catálogo: ${catalog.length}`}
+function removeInjected(){document.querySelectorAll<HTMLElement>(`[data-sim-slot="1"].${FAKE_CLASS}`).forEach(clearFakeSlot);document.getElementById(DETAIL_ID)?.remove()}
+function getVisibleInventoryPage():HTMLElement|null{
+  const pages=[...document.querySelectorAll<HTMLElement>('.inventory_ctn .inventory_page')].filter(x=>{
+    const r=x.getBoundingClientRect(); const st=getComputedStyle(x); return r.width>0&&r.height>0&&st.display!=='none'&&st.visibility!=='hidden'
+  });
+  return pages[0]||document.querySelector<HTMLElement>('.inventory_page');
+}
+function getGridHolders(){
+  const page=getVisibleInventoryPage();
+  if(!page)return [];
+  return [...page.querySelectorAll<HTMLElement>(':scope > .itemHolder')];
+}
+function findEmptyGridSlot(){
+  const holders=getGridHolders();
+  return holders.find(h=>h.classList.contains('disabled')&&!h.querySelector('.item'))||
+    holders.find(h=>!h.querySelector('.item')&&!h.classList.contains(FAKE_CLASS))||null;
+}
+function rarityColor(r:string){
+  const k=r.toLowerCase();
+  if(k.includes('contraband'))return '#e4ae39';
+  if(k.includes('covert'))return '#eb4b4b';
+  if(k.includes('classified'))return '#d32ce6';
+  if(k.includes('restricted'))return '#8847ff';
+  if(k.includes('mil-spec')||k.includes('mil spec'))return '#4b69ff';
+  if(k.includes('industrial'))return '#5e98d9';
+  if(k.includes('consumer'))return '#b0c3d9';
+  return '#b0c3d9';
+}
+function steamImageUrl(url:string){
+  if(!url)return '';
+  if(/^https?:\/\//i.test(url))return url;
+  return `https://community.akamai.steamstatic.com/economy/image/${url}`;
+}
+function clearFakeSlot(slot:HTMLElement){
+  if(slot.getAttribute('data-sim-slot')!=='1')return;
+  slot.removeAttribute('data-sim-slot');slot.removeAttribute('data-sim-id');slot.classList.remove(FAKE_CLASS);slot.removeAttribute(INTERNAL_ATTR);slot.classList.add('disabled');slot.innerHTML='';
+}
+function makeFake(item:MockItem,slot:HTMLElement){
+  slot.classList.remove('disabled');slot.classList.add(FAKE_CLASS);slot.setAttribute('data-sim-slot','1');slot.setAttribute('data-sim-id',item.id);slot.setAttribute(INTERNAL_ATTR,'1');slot.innerHTML='';
+  // Use a real Steam .item as the visual template. This preserves the native
+  // dimensions/centering/hover treatment instead of rebuilding the card.
+  const template=[...document.querySelectorAll<HTMLElement>('.inventory_page .itemHolder:not([data-sim-slot="1"]) > .item')].find(x=>x.querySelector('img'))||null;
+  const el=(template?.cloneNode(true) as HTMLElement|null)||document.createElement('div');
+  el.classList.add('item','app730','context2');
+  el.removeAttribute('id');
+  el.removeAttribute(INTERNAL_ATTR);
+  (el as any).rgItem=undefined;
+  el.style.borderColor=item.rarityColor||rarityColor(item.rarity);
+  // Keep the native background unless the cloned item did not have one.
+  const img=el.querySelector<HTMLImageElement>(':scope > img')||el.querySelector<HTMLImageElement>('img');
+  if(img){
+    img.src=steamImageUrl(item.imageUrl);
+    img.removeAttribute('data-src');img.removeAttribute('lazyload');
+    img.style.position='static';img.style.width='auto';img.style.height='auto';img.style.maxWidth='100%';img.style.maxHeight='100%';img.style.objectFit='contain';img.style.margin='0';img.style.transform='none';
+  }
+  // Remove cloned item-specific decorations/text that belong to the real asset.
+  el.querySelectorAll('.slot_app_fraudwarning,.item_currency_amount,.item_currency_name').forEach(x=>x.remove());
+  let link=el.querySelector<HTMLAnchorElement>(':scope > a.inventory_item_link');
+  if(!link){link=document.createElement('a');link.className='inventory_item_link';el.appendChild(link)}
+  link.href='javascript:void(0)';
+  link.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();showNativeDetail(item,slot)});
+  slot.appendChild(el);
+}
+
+function inject(){
+  injectScheduled=false;if(!enabled()||!inventoryPage())return;
+  const items=getItems(),slots=[...document.querySelectorAll<HTMLElement>('[data-sim-slot="1"]')];
+  if(!items.length){slots.forEach(clearFakeSlot);return}
+  const byId=new Map(slots.map(x=>[x.getAttribute('data-sim-id')||'',x]));
+  for(const s of slots)if(!items.some(i=>i.id===s.getAttribute('data-sim-id')))clearFakeSlot(s);
+  for(const item of items){const existing=byId.get(item.id);if(existing)continue;const slot=findEmptyGridSlot();if(!slot){log('não há slot vazio na página atual',diagnose());break}makeFake(item,slot)}
+}
+function scheduleInject(){if(injectScheduled)return;injectScheduled=true;window.setTimeout(inject,80)}
+function scheduleRender(){if(renderScheduled)return;renderScheduled=true;window.setTimeout(()=>{renderScheduled=false;render()},50)}
+function marketUrl(n:string,w:string){return `https://steamcommunity.com/market/listings/730/${encodeURIComponent(`${n} (${w})`)}`}
+function val(r:HTMLElement,k:string){return r.querySelector<HTMLInputElement|HTMLSelectElement>(`[data-f="${k}"]`)}
+function field(l:string,k:string,v:string,type='text',extra=''){return `<div class="f"><label>${l}</label><input data-f="${k}" type="${type}" value="${esc(v)}" ${extra}></div>`}
+
+function normalizeCatalog(raw:any):CatalogSkin[]{
+  const arr=Array.isArray(raw)?raw:Object.values(raw||{}),out:CatalogSkin[]=[];
+  for(const v of arr as any[]){
+    const name=String(v?.name||v?.market_hash_name||'');if(!name.includes(' | '))continue;
+    const m=name.match(/^(.+?)\s*\|\s*(.+?)(?:\s+\((Factory New|Minimal Wear|Field-Tested|Well-Worn|Battle-Scarred)\))?$/);
+    const weapon=String(v?.weapon?.name||v?.weapon||m?.[1]||''),finish=String(v?.finish?.name||v?.finish||m?.[2]||'');if(!weapon||!finish)continue;
+    const fr=v?.float_range||v?.float_caps||v?.floatRange;const min=Array.isArray(fr)?Number(fr[0]):Number(fr?.min),max=Array.isArray(fr)?Number(fr[1]):Number(fr?.max);
+    const wears=Array.isArray(v?.wears)?v.wears.filter((x:any)=>typeof x==='string'):[];const rarity=String(v?.rarity?.name||v?.rarity||'Unknown');
+    out.push({market_hash_name:String(v?.market_hash_name||name),weapon,finish,rarity,rarityColor:(v?.rarity?.color||v?.rarityColor)?('#'+String(v?.rarity?.color||v?.rarityColor).replace(/^#/,'').replace(/[^0-9a-f]/ig,'')):undefined,wears:wears.length?wears:['Factory New','Minimal Wear','Field-Tested','Well-Worn','Battle-Scarred'],floatMin:Number.isFinite(min)?min:0,floatMax:Number.isFinite(max)?max:1,image:v?.image||v?.image_url,stattrak:v?.stattrak===true,souvenir:v?.souvenir===true})
+  }
+  const map=new Map<string,CatalogSkin>();for(const x of out){const k=`${x.weapon}|${x.finish}`;if(!map.has(k)||x.image)map.set(k,x)}return[...map.values()]
+}
+async function loadCatalog(){
+  const cached=localStorage.getItem(CATALOG_KEY);if(cached)try{const c=JSON.parse(cached);if(Array.isArray(c)&&c.length>100)catalog=c}catch{}
+  if(catalogLoading)return;catalogLoading=true;
+  try{const r=await fetch(CATALOG_URL,{credentials:'omit',cache:'no-cache'});if(r.ok){const c=normalizeCatalog(await r.json());if(c.length>100){catalog=c;localStorage.setItem(CATALOG_KEY,JSON.stringify(c))}}}catch(e){log('catálogo remoto indisponível',e)}
+  catalogLoading=false;refreshCatalogUI()
+}
+function weapons(){return[...new Set(catalog.map(x=>x.weapon))].sort((a,b)=>a.localeCompare(b))}
+function skins(w:string){return catalog.filter(x=>x.weapon===w).sort((a,b)=>a.finish.localeCompare(b.finish))}
+function selected(root:HTMLElement){const w=val(root,'weapon')?.value||'',k=val(root,'skin')?.value||'';return skins(w).find(x=>`${x.weapon}|${x.finish}`===k)}
+function updateMeta(root:HTMLElement){
+  const c=selected(root);if(!c)return;const meta=root.querySelector<HTMLElement>('[data-meta]');if(meta)meta.textContent=`${c.rarity} · float ${c.floatMin.toFixed(3)}–${c.floatMax.toFixed(3)} · ${c.wears.join(', ')}`;
+  const f=val(root,'float') as HTMLInputElement|null;if(f){f.min=String(c.floatMin);f.max=String(c.floatMax);const n=Number(f.value);if(!Number.isFinite(n)||n<c.floatMin||n>c.floatMax)f.value=c.floatMin.toFixed(6)}
+}
+function refreshCatalogUI(){
+  const p=document.getElementById(PANEL_ID);if(!p)return;const w=val(p,'weapon') as HTMLSelectElement,s=val(p,'skin') as HTMLSelectElement;
+  if(!w||!s)return;const ow=w.value;w.innerHTML=weapons().map(x=>`<option>${esc(x)}</option>`).join('');if(weapons().includes(ow))w.value=ow;
+  const a=skins(w.value),old=s.value;s.innerHTML=a.map(x=>`<option value="${esc(x.weapon+'|'+x.finish)}">${esc(x.finish)} — ${esc(x.rarity)}</option>`).join('');if(a.some(x=>x.weapon+'|'+x.finish===old))s.value=old;updateMeta(p)
+}
+
+function render(){
+  const old=document.getElementById(PANEL_ID) as HTMLElement|null;if(!enabled()||!inventoryPage()){old?.remove();document.getElementById(DETAIL_ID)?.remove();return}
+  ensureStyle();if(old){const d=old.querySelector<HTMLElement>('[data-diag]');if(d)d.textContent=diagnose();return}
+  const ws=weapons(),w=ws.includes('AK-47')?'AK-47':(ws[0]||'AK-47'),a=skins(w),c=a[0],items=getItems(),root=document.createElement('div');root.id=PANEL_ID;root.setAttribute(INTERNAL_ATTR,'1');
+  root.innerHTML=`<div class="h"><div><div class="t">Inventário Mock 3.5</div><div class="s">visual local · catálogo automático</div></div><button class="btn close" data-close>×</button></div><div class="b">
+  <div class="note">Somente visual/local. Nenhum item é criado ou alterado no Steam.</div><div class="diag" data-diag>${esc(diagnose())}</div><button class="btn primary" data-refresh>↻ Detectar grade e atualizar</button>
+  <div class="f"><label>Arma</label><select data-f="weapon">${ws.map(x=>`<option ${x===w?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
+  <div class="f"><label>Skin</label><select data-f="skin">${a.map(x=>`<option value="${esc(x.weapon+'|'+x.finish)}">${esc(x.finish)} — ${esc(x.rarity)}</option>`).join('')}</select></div>
+  <div class="status" data-meta>${c?`${esc(c.rarity)} · float ${c.floatMin.toFixed(3)}–${c.floatMax.toFixed(3)} · ${esc(c.wears.join(', '))}`:'Carregando catálogo…'}</div>
+  <div class="f"><label>Exterior</label><select data-f="wear">${(c?.wears||['Factory New','Minimal Wear','Field-Tested','Well-Worn','Battle-Scarred']).map(x=>`<option>${esc(x)}</option>`).join('')}</select></div>
+  <div class="row">${field('Float','float',(c?.floatMin??0).toFixed(6),'number',`min="${c?.floatMin??0}" max="${c?.floatMax??1}" step="0.000001"`)}${field('Pattern / Paint Seed','pattern','0','number','min="0" max="999"')}</div>
+  <div class="row">${field('Kills (somente StatTrak)','kills','0','number','min="0" step="1"')}${field('Imagem','imageUrl',c?.image||'','text','placeholder="preenchida pelo catálogo"')}</div>
+  <div class="check"><input type="checkbox" data-f="stattrak"> StatTrak™</div><div class="check"><input type="checkbox" data-f="souvenir"> Souvenir</div>
+  <button class="btn primary" data-save>Adicionar ao inventário</button><button class="btn" data-import>Copiar skin de outro inventário</button>
+  <div class="status">Importação usa somente dados públicos do inventário e cria uma cópia visual local.</div>
+  <div class="list"><strong>Itens locais (${items.length})</strong>${items.map(i=>`<div class="lr"><img src="${esc(i.imageUrl)}"><div class="lm"><div class="ln">${esc(i.name)}</div><div class="meta">${esc(i.rarity)} · ${esc(i.wear)} · ${esc(i.float)}${i.stattrak?' · ST':''}</div></div><button class="btn" data-show="${i.id}">Detalhes</button><button class="btn danger" data-remove="${i.id}">×</button></div>`).join('')}</div></div>`;
+  document.body.appendChild(root);
+  root.querySelector('[data-close]')?.addEventListener('click',()=>root.remove());
+  root.querySelector('[data-refresh]')?.addEventListener('click',()=>{removeInjected();scheduleInject()});
+  root.querySelector('[data-f="weapon"]')?.addEventListener('change',()=>{const w=val(root,'weapon') as HTMLSelectElement,s=val(root,'skin') as HTMLSelectElement,a=skins(w.value);s.innerHTML=a.map(x=>`<option value="${esc(x.weapon+'|'+x.finish)}">${esc(x.finish)} — ${esc(x.rarity)}</option>`).join('');const c=a[0],wear=val(root,'wear') as HTMLSelectElement;wear.innerHTML=(c?.wears||[]).map(x=>`<option>${esc(x)}</option>`).join('');if(c)(val(root,'imageUrl') as HTMLInputElement).value=c.image||'';updateMeta(root)});
+  root.querySelector('[data-f="skin"]')?.addEventListener('change',()=>{const c=selected(root);if(c){const wear=val(root,'wear') as HTMLSelectElement;wear.innerHTML=c.wears.map(x=>`<option>${esc(x)}</option>`).join('');(val(root,'imageUrl') as HTMLInputElement).value=c.image||'';updateMeta(root)}});
+  root.querySelector('[data-save]')?.addEventListener('click',()=>saveFromPanel(root));root.querySelector('[data-import]')?.addEventListener('click',importInventory);
+  wireList(root);loadCatalog()
+}
+function saveFromPanel(root:HTMLElement){
+  const c=selected(root);if(!c){alert('Selecione uma skin.');return}const wear=val(root,'wear')?.value||c.wears[0]||'Factory New',fv=Number(val(root,'float')?.value||c.floatMin);
+  const item:MockItem={id:uid(),name:`${c.weapon} | ${c.finish}`,weapon:c.weapon,finish:c.finish,wear,float:Math.min(c.floatMax,Math.max(c.floatMin,fv)).toFixed(6),pattern:String(Math.max(0,Math.min(999,Number(val(root,'pattern')?.value||0)))),rarity:c.rarity,rarityColor:c.rarityColor,stattrak:!!(val(root,'stattrak') as HTMLInputElement)?.checked,kills:Math.max(0,Math.floor(Number(val(root,'kills')?.value||0))),souvenir:!!(val(root,'souvenir') as HTMLInputElement)?.checked,imageUrl:(val(root,'imageUrl')?.value||c.image||'').trim(),marketUrl:marketUrl(`${c.weapon} | ${c.finish}`,wear)};
+  setItems([...getItems(),item]);renderList(root);scheduleInject()
+}
+function wireList(root:HTMLElement){root.querySelectorAll<HTMLElement>('[data-remove]').forEach(b=>b.addEventListener('click',()=>{setItems(getItems().filter(i=>i.id!==b.dataset.remove));renderList(root);scheduleInject()}));root.querySelectorAll<HTMLElement>('[data-show]').forEach(b=>b.addEventListener('click',()=>{const i=getItems().find(x=>x.id===b.dataset.show);if(i)showDetail(i)}))}
+function renderList(root:HTMLElement){const l=root.querySelector<HTMLElement>('.list');if(!l)return;const items=getItems();l.innerHTML=`<strong>Itens locais (${items.length})</strong>${items.map(i=>`<div class="lr"><img src="${esc(i.imageUrl)}"><div class="lm"><div class="ln">${esc(i.name)}</div><div class="meta">${esc(i.rarity)} · ${esc(i.wear)} · ${esc(i.float)}${i.stattrak?' · ST':''}</div></div><button class="btn" data-show="${i.id}">Detalhes</button><button class="btn danger" data-remove="${i.id}">×</button></div>`).join('')}`;wireList(root)}
+function nativeInfoPanels():HTMLElement[] {
+  const ids=['iteminfo0','iteminfo1'];
+  const byId=ids.map(id=>document.getElementById(id)).filter((x):x is HTMLElement=>x instanceof HTMLElement);
+  const extra=[...document.querySelectorAll<HTMLElement>('.inventory_iteminfo')].filter(x=>!byId.includes(x));
+  return [...byId,...extra];
+}
+function visibleNativeInfoPanel():HTMLElement|null {
+  const panels=nativeInfoPanels();
+  return panels.find(x=>{
+    const r=x.getBoundingClientRect(),st=getComputedStyle(x);
+    return r.width>100&&r.height>100&&st.display!=='none'&&st.visibility!=='hidden'&&st.opacity!=='0';
+  })||null;
+}
+function setTextFirst(root:Element,selectors:string[],value:string){
+  for(const q of selectors){const e=root.querySelector<HTMLElement>(q);if(e){e.textContent=value;return e}}
+  return null;
+}
+function selectRealItemForNativePanel(){
+  const inv=(window as any).g_ActiveInventory;
+  const holders=getGridHolders().filter(h=>h.getAttribute('data-sim-slot')!=='1'&&h.querySelector('.item'));
+  for(const h of holders){
+    const el=h.querySelector<HTMLElement>(':scope > .item') as any;
+    const rg=el?.rgItem;
+    if(inv?.SelectItem&&el&&rg){
+      try{inv.SelectItem(null,el,rg,true);return {holder:h,el,rg}}
+      catch(e){log('SelectItem falhou',e)}
+    }
+  }
+  for(const h of holders){
+    const link=h.querySelector<HTMLAnchorElement>(':scope > .item > a.inventory_item_link');
+    if(link){try{link.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));return {holder:h,el:h.querySelector<HTMLElement>(':scope > .item'),rg:null}}catch{}}
+  }
+  return null;
+}
+function descriptorHtml(item:MockItem){
+  const tags=[item.weapon,item.rarity,item.wear,item.stattrak?'StatTrak™':'',item.souvenir?'Souvenir':''].filter(Boolean);
+  return `<div style="margin-bottom:8px"><span style="color:#d6d7d8">Exterior: </span>${esc(item.wear)}</div>`+
+    `<div style="color:#b9c6d2;line-height:1.45;margin-bottom:8px">${esc(item.finish)} para ${esc(item.weapon)}.</div>`+
+    `<div style="color:#9aa4ad;margin-bottom:8px">Marcadores: ${tags.map(esc).join(', ')}</div>`+
+    `<div style="color:#9aa4ad">Estilo do padrão: ${esc(item.pattern)}</div>`+
+    `<div style="color:#9aa4ad">Nível de desgaste: ${esc(item.float)}</div>`+
+    `${item.stattrak?`<div style="color:#9aa4ad">Contador StatTrak™: ${item.kills}</div>`:''}`;
+}
+function patchOneNativePanel(panel:HTMLElement,item:MockItem){
+  const imgUrl=steamImageUrl(item.imageUrl);
+  const icon=panel.querySelector<HTMLImageElement>('.item_desc_icon img,[id$="_item_icon"],img.item_desc_icon');
+  if(icon&&imgUrl){icon.src=imgUrl;icon.removeAttribute('srcset');icon.removeAttribute('data-src')}
+  setTextFirst(panel,['h1.hover_item_name','.hover_item_name','[id$="_item_name"]'],item.name);
+  setTextFirst(panel,['#iteminfo0_game_name','#iteminfo1_game_name','[id$="_game_name"]'],'Counter-Strike 2');
+  setTextFirst(panel,['#iteminfo0_item_type','#iteminfo1_item_type','[id$="_item_type"]'],`${item.weapon} (Nível ${item.rarity})`);
+  const nameEl=panel.querySelector<HTMLElement>('.hover_item_name,h1.hover_item_name,[id$="_item_name"]');
+  if(nameEl)nameEl.style.color=item.rarityColor||rarityColor(item.rarity);
+  const gameIcon=panel.querySelector<HTMLImageElement>('[id$="_game_icon"]');
+  if(gameIcon&&!gameIcon.src||gameIcon&&/trans\.gif/i.test(gameIcon.src))gameIcon.src='https://community.akamai.steamstatic.com/public/images/apps/730/730icon.jpg';
+  const desc=panel.querySelector<HTMLElement>('.item_desc_descriptors');
+  if(desc)desc.innerHTML=descriptorHtml(item);
+  const owner=panel.querySelector<HTMLElement>('.item_desc_owner_descriptors,#iteminfo0_item_owner_descriptors,#iteminfo1_item_owner_descriptors');
+  if(owner)owner.innerHTML='';
+  panel.querySelectorAll<HTMLElement>('.item_market_actions,.market_actions,.item_market_action_button,.market_listing_right_cell').forEach(x=>x.style.display='none');
+  panel.setAttribute('data-sim-native-detail','1');
+  // Keep Steam's own panel visible; only the selected asset's data is replaced.
+  panel.style.zIndex='20';
+}
+function patchNativeDetail(item:MockItem){
+  const panels=nativeInfoPanels();
+  if(!panels.length)return false;
+  let touched=false;
+  for(const p of panels){
+    patchOneNativePanel(p,item);
+    const r=p.getBoundingClientRect();
+    if(r.width>100&&r.height>100)touched=true;
+  }
+  return touched;
+}
+function showNativeDetail(item:MockItem,slot?:HTMLElement){
+  const fakeSlot=slot||null;
+  // Do NOT create a second/plugin detail window. The only detail UI used here is
+  // Steam's own iteminfo0/iteminfo1 pair. We temporarily select a real item so
+  // Steam populates its native panel, then overwrite that panel locally.
+  const selected=selectRealItemForNativePanel();
+  if(!selected){log('nenhum item real disponível para abrir o inventory_iteminfo');return}
+  const apply=()=>{
+    patchNativeDetail(item);
+    document.querySelectorAll<HTMLElement>('.itemHolder.activeInfo,.item.activeInfo').forEach(x=>x.classList.remove('activeInfo'));
+    if(fakeSlot){fakeSlot.classList.add('activeInfo');fakeSlot.querySelector('.item')?.classList.add('activeInfo')}
+  };
+  apply();
+  [50,120,220,400,700].forEach(ms=>window.setTimeout(apply,ms));
+}
+function showDetail(i:MockItem){
+  const slot=document.querySelector<HTMLElement>(`[data-sim-id="${CSS.escape(i.id)}"]`);
+  if(slot)showNativeDetail(i,slot);
+}
+function parseSteamId(html:string){return(html.match(/g_steamID\s*=\s*["'](\d{17})["']/)||html.match(/steamid["']?\s*[:=]\s*["'](\d{17})/i))?.[1]||null}
+async function importInventory(){
+  const input=prompt('Cole a URL pública do inventário Steam/CS2:');if(!input)return;try{
+    let id=(input.match(/\/profiles\/(\d{17})/i)||[])[1]||null;if(!id){const r=await fetch(input,{credentials:'include'});if(r.ok)id=parseSteamId(await r.text())}
+    if(!id){alert('Não consegui identificar o SteamID64.');return}
+    const r=await fetch(`https://steamcommunity.com/inventory/${id}/730/2?l=english&count=5000`,{credentials:'include'});if(!r.ok)throw Error(`HTTP ${r.status}`);const data=await r.json();
+    const desc=new Map<string,any>((data.descriptions||[]).map((x:any)=>[`${x.classid}_${x.instanceid}`,x])),list:any[]=[];
+    for(const a of(data.assets||[])){const d=desc.get(`${a.classid}_${a.instanceid}`)||{},mh=String(d.market_hash_name||'');if(!mh.includes(' | '))continue;const m=mh.match(/^(.+?) \| (.+?)(?: \(([^)]+)\))?$/);if(!m)continue;const c=skins(m[1]).find(x=>x.finish===m[2]);list.push({d,c,weapon:m[1],finish:m[2],wear:m[3]||'Factory New'})}
+    if(!list.length){alert('Nenhuma skin compatível encontrada.');return}
+    const shown=list.slice(0,80).map((x,i)=>`${i+1}. ${x.weapon} | ${x.finish} — ${x.wear}`).join('\n'),n=Number(prompt(`Itens encontrados: ${list.length}\n\n${shown}\n\nDigite o número para copiar:`));if(!Number.isInteger(n)||n<1||n>Math.min(80,list.length))return;
+    const x=list[n-1],d=x.d,c=x.c,item:MockItem={id:uid(),name:`${x.weapon} | ${x.finish}`,weapon:x.weapon,finish:x.finish,wear:x.wear,float:'0.000000',pattern:'0',rarity:c?.rarity||d.rarity||'Unknown',rarityColor:c?.rarityColor,stattrak:/StatTrak/i.test(d.name||'')||/StatTrak/i.test(d.market_hash_name||''),kills:0,souvenir:/Souvenir/i.test(d.name||''),imageUrl:d.icon_url_large?`https://community.akamai.steamstatic.com/economy/image/${d.icon_url_large}`:c?.image||'',marketUrl:marketUrl(`${x.weapon} | ${x.finish}`,x.wear),source:'steam-public'};
+    setItems([...getItems(),item]);const p=document.getElementById(PANEL_ID);if(p)renderList(p);scheduleInject();alert(`Cópia local adicionada: ${item.name}`)
+  }catch(e){console.error('[SIM3.6] import',e);alert('Não foi possível ler o inventário. Ele pode estar privado ou o Steam pode ter bloqueado a leitura.')}
+}
+function meaningfulMutation(records:MutationRecord[]){for(const r of records){const t=r.target instanceof Element?r.target:null;if(t?.closest(`#${PANEL_ID},#${DETAIL_ID},.${FAKE_CLASS}`))continue;const nodes=[...r.addedNodes,...r.removedNodes];if(nodes.length&&nodes.every(n=>n instanceof Element&&(n as Element).closest(`#${PANEL_ID},#${DETAIL_ID},.${FAKE_CLASS},style`)))continue;if(r.type==='childList'||r.type==='attributes')return true}return false}
+function handleMutation(records:MutationRecord[]){if(!meaningfulMutation(records))return;const changed=location.href!==lastUrl;if(changed){lastUrl=location.href;removeInjected();scheduleRender()}scheduleInject()}
+function start(){ensureStyle();scheduleRender();scheduleInject();window.addEventListener('hashchange',()=>{lastUrl=location.href;removeInjected();scheduleRender();scheduleInject()});window.addEventListener('popstate',()=>{lastUrl=location.href;removeInjected();scheduleRender();scheduleInject()});observer?.disconnect();observer=new MutationObserver(handleMutation);observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style','src','data-assetid','data-id']});window.setInterval(()=>{if(!inventoryPage())return;const n=getItems().length;if(document.querySelectorAll('[data-sim-slot="1"]').length!==n)scheduleInject();else scheduleInject();if(!document.getElementById(PANEL_ID))scheduleRender()},2500)}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
