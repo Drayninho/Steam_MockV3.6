@@ -1,0 +1,37 @@
+import { definePlugin, Field } from 'millennium';
+import { useEffect, useState } from 'react';
+
+const STORAGE_KEY = 'steam-inventory-mock.enabled.v3_5';
+
+const SettingsContent = () => {
+  const [enabled, setEnabled] = useState(() => localStorage.getItem(STORAGE_KEY) !== 'false');
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, String(enabled));
+  }, [enabled]);
+
+  return (
+    <div style={{ padding: '10px', maxWidth: 700 }}>
+      <Field
+        label="Steam Inventory Mock v3.6"
+        description="Simulação visual local para o inventário CS2. Não cria nem altera itens no Steam Inventory Service."
+      />
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}>
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        Ativar itens visuais fictícios
+      </label>
+      <p style={{ opacity: 0.7, fontSize: 12, lineHeight: 1.5 }}>
+        Abra seu inventário do Counter-Strike 2 em steamcommunity.com. O editor permite selecionar arma e skin por catálogo e importar uma skin pública como cópia visual local.
+        Os itens são armazenados apenas localmente neste navegador/webview.
+      </p>
+      <p style={{ opacity: 0.55, fontSize: 11, lineHeight: 1.5 }}>
+        A imagem é obtida de uma página do Steam Community Market para manter a aparência nativa. O float/pattern/kills são metadados visuais locais e não alteram a imagem real do anúncio.
+      </p>
+    </div>
+  );
+};
+
+export default definePlugin(() => ({
+  title: 'Steam Inventory Mock',
+  content: <SettingsContent />,
+}));
